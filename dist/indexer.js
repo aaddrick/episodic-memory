@@ -216,6 +216,12 @@ export async function indexUnprocessed(concurrency = 1, noSummaries = false) {
     const ARCHIVE_DIR = getArchiveDir(); // Now uses paths.ts
     const projects = fs.readdirSync(PROJECTS_DIR);
     const excludedProjects = getExcludedProjects();
+    // Load all indexed paths into memory for O(1) lookups (much faster than per-file queries)
+    const indexedPaths = new Set();
+    const indexedRows = db.prepare('SELECT DISTINCT archive_path FROM exchanges').all();
+    for (const row of indexedRows) {
+        indexedPaths.add(row.archive_path);
+    }
     const unprocessed = [];
     // Collect all unprocessed conversations
     for (const project of projects) {
@@ -231,10 +237,8 @@ export async function indexUnprocessed(concurrency = 1, noSummaries = false) {
                 const projectArchive = path.join(ARCHIVE_DIR, project);
                 const archivePath = path.join(projectArchive, file);
                 const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
-                // Check if already indexed in database
-                const alreadyIndexed = db.prepare('SELECT COUNT(*) as count FROM exchanges WHERE archive_path = ?')
-                    .get(archivePath);
-                if (alreadyIndexed.count > 0)
+                // Check if already indexed (O(1) Set lookup)
+                if (indexedPaths.has(archivePath))
                     continue;
                 fs.mkdirSync(projectArchive, { recursive: true });
                 // Archive if needed
