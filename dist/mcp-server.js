@@ -13886,7 +13886,10 @@ async function main() {
   console.error("Episodic Memory MCP server running via stdio");
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  let isShuttingDown = false;
   const shutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     try {
       await server.close();
     } catch {
@@ -13895,6 +13898,20 @@ async function main() {
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+  process.on("SIGHUP", shutdown);
+  process.stdin.on("close", shutdown);
+  process.stdin.on("end", shutdown);
+  process.on("uncaughtException", (err) => {
+    if (!isShuttingDown) {
+      console.error("Uncaught exception:", err);
+    }
+    process.exit(1);
+  });
+  process.on("unhandledRejection", (reason) => {
+    if (!isShuttingDown) {
+      console.error("Unhandled rejection:", reason);
+    }
+  });
 }
 main().catch((error) => {
   console.error("Server error:", error);

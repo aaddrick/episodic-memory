@@ -298,7 +298,10 @@ async function main() {
   await server.connect(transport);
 
   // Graceful shutdown handling
+  let isShuttingDown = false;
   const shutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     try {
       await server.close();
     } catch {
@@ -307,8 +310,28 @@ async function main() {
     process.exit(0);
   };
 
+  // Handle various shutdown signals
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+  process.on('SIGHUP', shutdown);
+
+  // Handle stdin close (how Claude Code typically terminates MCP servers)
+  process.stdin.on('close', shutdown);
+  process.stdin.on('end', shutdown);
+
+  // Suppress errors during shutdown
+  process.on('uncaughtException', (err) => {
+    if (!isShuttingDown) {
+      console.error('Uncaught exception:', err);
+    }
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    if (!isShuttingDown) {
+      console.error('Unhandled rejection:', reason);
+    }
+  });
 }
 
 // Run the Server
