@@ -13886,6 +13886,15 @@ async function main() {
   console.error("Episodic Memory MCP server running via stdio");
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  const shutdown = async () => {
+    try {
+      await server.close();
+    } catch {
+    }
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 main().catch((error) => {
   console.error("Server error:", error);

@@ -296,6 +296,19 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Graceful shutdown handling
+  const shutdown = async () => {
+    try {
+      await server.close();
+    } catch {
+      // Ignore errors during shutdown
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 // Run the Server
