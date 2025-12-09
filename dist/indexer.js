@@ -15,10 +15,34 @@ const EXCLUSION_MARKERS = [
     'Only use NO_INSIGHTS_FOUND',
     'Context: This summary will be shown in a list to help users and Claude choose which conversations are relevant',
 ];
+// Minimum number of actual messages (user/assistant) for a conversation to be worth indexing
+const MIN_MESSAGE_COUNT = 5;
 function shouldSkipConversation(filePath) {
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
-        return EXCLUSION_MARKERS.some(marker => content.includes(marker));
+        // Check for exclusion markers
+        if (EXCLUSION_MARKERS.some(marker => content.includes(marker))) {
+            return true;
+        }
+        // Count actual user/assistant messages (not queue-operations, summaries, etc.)
+        const lines = content.split('\n').filter(line => line.trim());
+        let messageCount = 0;
+        for (const line of lines) {
+            try {
+                const entry = JSON.parse(line);
+                if (entry.type === 'user' || entry.type === 'assistant') {
+                    messageCount++;
+                }
+            }
+            catch {
+                // Skip malformed lines
+            }
+        }
+        // Skip conversations with too few messages
+        if (messageCount < MIN_MESSAGE_COUNT) {
+            return true;
+        }
+        return false;
     }
     catch (error) {
         return false;
