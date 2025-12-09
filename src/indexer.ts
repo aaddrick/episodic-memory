@@ -118,30 +118,35 @@ export async function indexConversations(
     const toProcess: ConvToProcess[] = [];
 
     for (const file of files) {
-      const sourcePath = path.join(projectPath, file);
-      const archivePath = path.join(projectArchive, file);
+      try {
+        const sourcePath = path.join(projectPath, file);
+        const archivePath = path.join(projectArchive, file);
 
-      // Copy to archive
-      if (!fs.existsSync(archivePath)) {
-        fs.copyFileSync(sourcePath, archivePath);
-        console.log(`  Archived: ${file}`);
+        // Copy to archive
+        if (!fs.existsSync(archivePath)) {
+          fs.copyFileSync(sourcePath, archivePath);
+          console.log(`  Archived: ${file}`);
+        }
+
+        // Parse conversation
+        const exchanges = await parseConversation(sourcePath, project, archivePath);
+
+        if (exchanges.length === 0) {
+          console.log(`  Skipped ${file} (no exchanges)`);
+          continue;
+        }
+
+        toProcess.push({
+          file,
+          sourcePath,
+          archivePath,
+          summaryPath: archivePath.replace('.jsonl', '-summary.txt'),
+          exchanges
+        });
+      } catch (error) {
+        // Log error but continue processing other files
+        console.error(`  Error processing ${file}: ${error instanceof Error ? error.message : error}`);
       }
-
-      // Parse conversation
-      const exchanges = await parseConversation(sourcePath, project, archivePath);
-
-      if (exchanges.length === 0) {
-        console.log(`  Skipped ${file} (no exchanges)`);
-        continue;
-      }
-
-      toProcess.push({
-        file,
-        sourcePath,
-        archivePath,
-        summaryPath: archivePath.replace('.jsonl', '-summary.txt'),
-        exchanges
-      });
     }
 
     // Batch summarize conversations in parallel (unless --no-summaries)
@@ -304,29 +309,34 @@ export async function indexUnprocessed(concurrency: number = 1, noSummaries: boo
     const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.jsonl'));
 
     for (const file of files) {
-      const sourcePath = path.join(projectPath, file);
-      const projectArchive = path.join(ARCHIVE_DIR, project);
-      const archivePath = path.join(projectArchive, file);
-      const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
+      try {
+        const sourcePath = path.join(projectPath, file);
+        const projectArchive = path.join(ARCHIVE_DIR, project);
+        const archivePath = path.join(projectArchive, file);
+        const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
 
-      // Check if already indexed in database
-      const alreadyIndexed = db.prepare('SELECT COUNT(*) as count FROM exchanges WHERE archive_path = ?')
-        .get(archivePath) as { count: number };
+        // Check if already indexed in database
+        const alreadyIndexed = db.prepare('SELECT COUNT(*) as count FROM exchanges WHERE archive_path = ?')
+          .get(archivePath) as { count: number };
 
-      if (alreadyIndexed.count > 0) continue;
+        if (alreadyIndexed.count > 0) continue;
 
-      fs.mkdirSync(projectArchive, { recursive: true });
+        fs.mkdirSync(projectArchive, { recursive: true });
 
-      // Archive if needed
-      if (!fs.existsSync(archivePath)) {
-        fs.copyFileSync(sourcePath, archivePath);
+        // Archive if needed
+        if (!fs.existsSync(archivePath)) {
+          fs.copyFileSync(sourcePath, archivePath);
+        }
+
+        // Parse and check
+        const exchanges = await parseConversation(sourcePath, project, archivePath);
+        if (exchanges.length === 0) continue;
+
+        unprocessed.push({ project, file, sourcePath, archivePath, summaryPath, exchanges });
+      } catch (error) {
+        // Log error but continue processing other files
+        console.error(`  Error processing ${project}/${file}: ${error instanceof Error ? error.message : error}`);
       }
-
-      // Parse and check
-      const exchanges = await parseConversation(sourcePath, project, archivePath);
-      if (exchanges.length === 0) continue;
-
-      unprocessed.push({ project, file, sourcePath, archivePath, summaryPath, exchanges });
     }
   }
 
