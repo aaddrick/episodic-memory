@@ -259,6 +259,39 @@ export async function indexUnprocessed(concurrency = 1, noSummaries = false) {
     await initEmbeddings();
     const PROJECTS_DIR = getProjectsDir();
     const ARCHIVE_DIR = getArchiveDir(); // Now uses paths.ts
+    // Auto-prune short/excluded conversations from archive
+    if (fs.existsSync(ARCHIVE_DIR)) {
+        let pruned = 0;
+        const archiveProjects = fs.readdirSync(ARCHIVE_DIR);
+        for (const project of archiveProjects) {
+            const projectPath = path.join(ARCHIVE_DIR, project);
+            if (!fs.statSync(projectPath).isDirectory())
+                continue;
+            const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.jsonl'));
+            for (const file of files) {
+                const archivePath = path.join(projectPath, file);
+                if (shouldSkipConversation(archivePath)) {
+                    // Delete from database
+                    const rows = db.prepare('SELECT id FROM exchanges WHERE archive_path = ?').all(archivePath);
+                    for (const row of rows) {
+                        db.prepare('DELETE FROM vec_exchanges WHERE id = ?').run(row.id);
+                        db.prepare('DELETE FROM tool_calls WHERE exchange_id = ?').run(row.id);
+                        db.prepare('DELETE FROM exchanges WHERE id = ?').run(row.id);
+                    }
+                    // Delete files
+                    const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
+                    if (fs.existsSync(archivePath))
+                        fs.unlinkSync(archivePath);
+                    if (fs.existsSync(summaryPath))
+                        fs.unlinkSync(summaryPath);
+                    pruned++;
+                }
+            }
+        }
+        if (pruned > 0) {
+            console.log(`Pruned ${pruned} short/excluded conversations from archive`);
+        }
+    }
     const projects = fs.readdirSync(PROJECTS_DIR);
     const excludedProjects = getExcludedProjects();
     // Load all indexed paths into memory for O(1) lookups (much faster than per-file queries)
