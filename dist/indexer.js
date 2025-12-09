@@ -8,6 +8,22 @@ import { summarizeConversation } from './summarizer.js';
 import { getArchiveDir, getExcludeConfigPath } from './paths.js';
 // Set max output tokens for Claude SDK (used by summarizer)
 process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = '20000';
+// Markers that indicate a conversation should not be indexed
+// (e.g., summarization sessions, internal tooling)
+const EXCLUSION_MARKERS = [
+    '<INSTRUCTIONS-TO-EPISODIC-MEMORY>DO NOT INDEX THIS CHAT</INSTRUCTIONS-TO-EPISODIC-MEMORY>',
+    'Only use NO_INSIGHTS_FOUND',
+    'Context: This summary will be shown in a list to help users and Claude choose which conversations are relevant',
+];
+function shouldSkipConversation(filePath) {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return EXCLUSION_MARKERS.some(marker => content.includes(marker));
+    }
+    catch (error) {
+        return false;
+    }
+}
 // Increase max listeners for concurrent API calls
 import { EventEmitter } from 'events';
 EventEmitter.defaultMaxListeners = 20;
@@ -82,6 +98,11 @@ export async function indexConversations(limitToProject, maxConversations, concu
             try {
                 const sourcePath = path.join(projectPath, file);
                 const archivePath = path.join(projectArchive, file);
+                // Skip conversations with exclusion markers (e.g., summarization sessions)
+                if (shouldSkipConversation(sourcePath)) {
+                    console.log(`  Skipped ${file} (excluded)`);
+                    continue;
+                }
                 // Copy to archive
                 if (!fs.existsSync(archivePath)) {
                     fs.copyFileSync(sourcePath, archivePath);
@@ -239,6 +260,9 @@ export async function indexUnprocessed(concurrency = 1, noSummaries = false) {
                 const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
                 // Check if already indexed (O(1) Set lookup)
                 if (indexedPaths.has(archivePath))
+                    continue;
+                // Skip conversations with exclusion markers (e.g., summarization sessions)
+                if (shouldSkipConversation(sourcePath))
                     continue;
                 fs.mkdirSync(projectArchive, { recursive: true });
                 // Archive if needed
