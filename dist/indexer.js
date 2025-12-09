@@ -346,3 +346,61 @@ export async function indexUnprocessed(concurrency = 1, noSummaries = false) {
     db.close();
     console.log(`\n✅ Processed ${unprocessed.length} conversations`);
 }
+export async function pruneShortConversations(dryRun = true) {
+    console.log(dryRun ? 'Scanning for short/excluded conversations (dry run)...' : 'Pruning short/excluded conversations...');
+    const db = initDatabase();
+    const ARCHIVE_DIR = getArchiveDir();
+    const deleted = [];
+    let pruned = 0;
+    if (!fs.existsSync(ARCHIVE_DIR)) {
+        console.log('No archive directory found.');
+        db.close();
+        return { pruned: 0, deleted: [] };
+    }
+    const projects = fs.readdirSync(ARCHIVE_DIR);
+    for (const project of projects) {
+        const projectPath = path.join(ARCHIVE_DIR, project);
+        if (!fs.statSync(projectPath).isDirectory())
+            continue;
+        const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.jsonl'));
+        for (const file of files) {
+            const archivePath = path.join(projectPath, file);
+            const summaryPath = archivePath.replace('.jsonl', '-summary.txt');
+            // Check if this file should be skipped (too short or has exclusion markers)
+            if (shouldSkipConversation(archivePath)) {
+                pruned++;
+                deleted.push(archivePath);
+                if (!dryRun) {
+                    // Delete from database
+                    const rows = db.prepare('SELECT id FROM exchanges WHERE archive_path = ?').all(archivePath);
+                    for (const row of rows) {
+                        db.prepare('DELETE FROM vec_exchanges WHERE id = ?').run(row.id);
+                        db.prepare('DELETE FROM tool_calls WHERE exchange_id = ?').run(row.id);
+                        db.prepare('DELETE FROM exchanges WHERE id = ?').run(row.id);
+                    }
+                    // Delete archive file
+                    if (fs.existsSync(archivePath)) {
+                        fs.unlinkSync(archivePath);
+                    }
+                    // Delete summary file if exists
+                    if (fs.existsSync(summaryPath)) {
+                        fs.unlinkSync(summaryPath);
+                    }
+                    console.log(`  Deleted: ${project}/${file}`);
+                }
+                else {
+                    console.log(`  Would delete: ${project}/${file}`);
+                }
+            }
+        }
+    }
+    db.close();
+    if (dryRun) {
+        console.log(`\n📋 Found ${pruned} conversations to prune.`);
+        console.log('Run with --prune --confirm to delete them.');
+    }
+    else {
+        console.log(`\n✅ Pruned ${pruned} conversations.`);
+    }
+    return { pruned, deleted };
+}

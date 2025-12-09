@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { verifyIndex, repairIndex } from './verify.js';
-import { indexSession, indexUnprocessed, indexConversations } from './indexer.js';
+import { indexSession, indexUnprocessed, indexConversations, pruneShortConversations } from './indexer.js';
 import { initDatabase } from './db.js';
 import { getDbPath, getArchiveDir } from './paths.js';
 import fs from 'fs';
@@ -74,6 +74,11 @@ async function main() {
         } else {
           console.log('✅ No issues to repair!');
         }
+        break;
+
+      case 'prune':
+        const confirmPrune = process.argv.includes('--confirm');
+        await pruneShortConversations(!confirmPrune);
         break;
 
       case 'rebuild':

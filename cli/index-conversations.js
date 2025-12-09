@@ -54,6 +54,7 @@ COMMANDS:
   --session ID   Index specific session (used by hook)
   --verify       Check index health
   --repair       Fix detected issues
+  --prune        Remove short (<5 messages) and excluded conversations
   --rebuild      Delete DB and re-index everything (requires confirmation)
 
 OPTIONS:
@@ -77,6 +78,12 @@ EXAMPLES:
 
   # Fix any issues found
   index-conversations --repair
+
+  # Preview what would be pruned (dry run)
+  index-conversations --prune
+
+  # Actually delete short/excluded conversations
+  index-conversations --prune --confirm
 
   # Nuclear option (deletes everything, re-indexes)
   index-conversations --rebuild
@@ -123,6 +130,10 @@ async function main() {
 
       case '--repair':
         await runTsxCommand('repair', args);
+        break;
+
+      case '--prune':
+        await runTsxCommand('prune', args);
         break;
 
       case '--rebuild':
