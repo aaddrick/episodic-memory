@@ -56,7 +56,22 @@ _Conversation ID: 216ad284-c782-45a4-b2ce-36775cdb5a6c_
 
 ## Installation
 
-### As an npm package (Recommended for this fork)
+### As a Claude Code plugin (Recommended)
+
+```bash
+# First, add this fork's marketplace
+claude plugin marketplace add github:aaddrick/episodic-memory
+
+# Then install the plugin
+claude plugin install episodic-memory@aaddrick-episodic-memory
+```
+
+For the original version (without fork enhancements):
+```bash
+claude plugin install episodic-memory@superpowers-marketplace
+```
+
+### As an npm package
 
 ```bash
 # Install globally from GitHub
@@ -69,16 +84,6 @@ npm install
 npm run build
 npm link
 ```
-
-### As a Claude Code plugin
-
-For the original version from the marketplace:
-```bash
-# In Claude Code
-/plugin install episodic-memory@superpowers-marketplace
-```
-
-For this fork, clone the repo and configure Claude Code to use the local MCP server.
 
 The plugin automatically:
 - Indexes conversations at the end of each session
