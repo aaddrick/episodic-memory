@@ -1,6 +1,19 @@
 # Episodic Memory
 
+> **Note:** This is a fork of [obra/episodic-memory](https://github.com/obra/episodic-memory) with additional features and fixes.
+
 Semantic search for Claude Code conversations. Remember past discussions, decisions, and patterns.
+
+## Fork Changes
+
+This fork includes the following enhancements:
+
+- **Auto-prune short conversations** - Conversations with fewer than 5 messages are automatically skipped during indexing
+- **Skip summarization sessions** - Conversations containing summarization prompts are excluded from indexing
+- **`--prune` command** - Manually remove short/excluded conversations from archive and database
+- **Graceful MCP shutdown** - Proper signal handling prevents errors on session exit
+- **O(1) path lookups** - Faster discovery phase using in-memory Set instead of per-file DB queries
+- **Error resilience** - File processing errors no longer stop the entire indexing run
 
 ## Testimonial
 
@@ -141,7 +154,7 @@ Features:
 Add to `.claude/hooks/session-end`:
 ```bash
 #!/bin/bash
-episodic-memory sync
+episodic-memory sync --background
 ```
 
 ### `episodic-memory stats`
@@ -157,9 +170,11 @@ episodic-memory stats
 Manual indexing tools for bulk operations and maintenance. See `episodic-memory index --help` for full options.
 
 Common operations:
-- `--cleanup` - Index all unprocessed conversations
+- `--cleanup` - Index all unprocessed conversations (auto-prunes short/excluded)
 - `--verify` - Check index health
 - `--repair` - Fix detected issues
+- `--prune` - Remove short (<5 messages) and excluded conversations from archive/database
+- `--prune --confirm` - Actually delete (without `--confirm` is dry-run)
 
 ### `episodic-memory search`
 
